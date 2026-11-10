@@ -21,7 +21,9 @@ CHANNELS = {
         "source_username": "@gta6videogame",
         "add_link": True, "link": "@GTA6AR",
         "prompt": """أنت قناة مخصصة لنقل أخبار وتسريبات لعبة GTA 6.
-المطلوب: انشر أي منشور يتعلق باللعبة، حتى لو كان مجرد مزحة، رقم غريب، شائعة، أو صورة بدون نص. ترجم النص إلى العربية بأسلوب طبيعي (إذا كان هناك نص).
+المطلوب: انشر أي منشور يتعلق باللعبة، حتى لو كان مجرد مزحة، رقم غريب، شائعة، أو صورة بدون نص. 
+- الترجمة: ترجم النص إلى العربية بأسلوب طبيعي جداً كأن شخصاً عربياً كتب الخبر من الأصل (تجنب الترجمة الحرفية أو الركيكة).
+- الأرقام: احتفظ بجميع الأرقام كما هي باللغة الإنجليزية (مثلاً اكتب 9 وليس ٩، واكتب 10 وليس عشرة).
 - ممنوع النشر (اجعل should_post=false) فقط إذا كان إعلاناً تجارياً صريحاً (بيع حسابات، اشتراكات، عروض متاجر).
 - لا تذكر اسم قناة المصدر أو روابطها نهائياً."""
     },
@@ -162,7 +164,6 @@ def call_groq(prompt, max_retries=3):
 async def apply_processing(config, text):
     custom_prompt = config.get("prompt", "")
     
-    # إذا لم يكن هناك نص (مجرد صورة)، نعتبره مقبولاً
     if not text:
         return {"should_post": True, "text": ""}
         
@@ -181,7 +182,7 @@ async def apply_processing(config, text):
         return {"should_post": bool(res.get("should_post", True)), "text": (res.get("text") or text).strip()}
     except Exception as e:
         print(f"❌ خطأ المعالجة: {e}")
-        return {"should_post": True, "text": text} # في حال فشل Groq، ننشر النص كما هو لضمان عدم فقدان الخبر
+        return {"should_post": True, "text": text} 
 
 async def process_batch(source_id, messages):
     config = CHANNELS.get(source_id)
