@@ -15,14 +15,14 @@ STATE_FILE = "relay_state.json"
 DOWNLOAD_DIR = "downloads"
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
-# في حال أردت نشر آخر 5 منشورات للتجربة، اجعلها True ثم أرجعها False
+# اجعلها True لتجربة آخر 5 منشورات، ثم أرجعها False
 TEST_MODE = False 
 
 CHANNELS = {
     -1009003946451: {
         "name": "تسريبات GTA 6",
         "target": -1002218686576,
-        "source_username": "@gta6deluxe",  # 👈 المصدر الروسي الجديد
+        "source_username": "@gta6deluxe",  # المصدر الروسي
         "add_link": True,
         "link": "@GTA6AR"
     },
@@ -140,7 +140,7 @@ def is_hardcoded_ad(text):
     if not text: return False
     ad_keywords = [
         r"рekлама", r"промокод", r"скидка", r"купить", r"цена", r"руб", 
-        r"реклама", r"подписка", r"канал", r"чат"
+        r"реклама", r"подписка"
     ]
     for kw in ad_keywords:
         if re.search(kw, text, re.IGNORECASE):
@@ -168,9 +168,9 @@ async def apply_processing(config, text):
     
     prompt = f"""أنت محرر لقناة عربية متخصصة في أخبار وتسريبات لعبة GTA 6.
 المطلوب:
-1. ترجمة النص التالي إلى اللغة العربية بأسلوب طبيعي جداً كأن شخصاً عربياً كتب الخبر من الأصل (تجنب الترجمة الحرفية أو الركيكة).
-2. إذا ورد أي مبلغ بالعملة الروسية (الروبل)، قم بتحويله إلى الدولار الأمريكي (1 دولار أمريكي ≈ 82.8 روبل) واكتب السعر بالدولار مع كلمة "حوالي" للتقريب.
-3. احتفظ بالأرقام الأخرى والأسماء كما هي.
+1. ترجمة النص التالي إلى اللغة العربية بأسلوب طبيعي جداً كأن شخصاً عربياً كتب الخبر من الأصل (تجنب الترجمة الحرفية).
+2. إذا ورد أي مبلغ بالعملة الروسية (الروبل)، قم بتحويله إلى الدولار الأمريكي (1 دولار ≈ 82.8 روبل) واكتب السعر بالدولار مع كلمة "حوالي" للتقريب.
+3. احتفظ بالأرقام والأسماء كما هي.
 4. لا تذكر اسم قناة المصدر أو روابطها نهائياً.
 5. إذا كان النص إعلاناً تجارياً صريحاً (بيع حسابات، اشتراكات، عروض متاجر) اجعل should_post=false.
 
@@ -199,7 +199,7 @@ async def process_batch(source_id, messages):
     if contains_click_here_phrase(raw_text): return
     
     if is_hardcoded_ad(raw_text):
-        print(f"⏭️ تجاهل إعلان تجاري (فلتر برمجي) — {config['name']}")
+        print(f"⏭️ تجاهل إعلان تجاري — {config['name']}")
         return
     
     hidden_links = extract_hidden_link_urls(text_msg, config.get("source_username"))
@@ -214,9 +214,7 @@ async def process_batch(source_id, messages):
     should_post = res.get("should_post", True)
     final_text = res.get("text", cleaned)
     
-    if not should_post and cleaned: 
-        print(f"⏭️ تجاهل إعلان (ذكاء اصطناعي) — {config['name']}")
-        return 
+    if not should_post and cleaned: return 
     
     if cleaned: record_published_text(source_id, cleaned)
     if final_text and is_duplicate_content(f"{source_id}#final", final_text): return
