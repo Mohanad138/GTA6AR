@@ -23,9 +23,9 @@ jobs:
           python-version: "3.11"
       - run: pip install -r requirements.txt
       - run: |
-          git config user.name "relay-user"
-          git config user.email "relay@users.noreply.github.com"
-      - name: Run Script
+          git config user.name "relay-bot"
+          git config user.email "relay-bot@users.noreply.github.com"
+      - name: Run bot
         env:
           TG_API_ID: ${{ secrets.TG_API_ID }}
           TG_API_HASH: ${{ secrets.TG_API_HASH }}
