@@ -15,17 +15,16 @@ STATE_FILE = "relay_state.json"
 DOWNLOAD_DIR = "downloads"
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
+# في حال أردت نشر آخر 5 منشورات للتجربة، اجعلها True ثم أرجعها False
+TEST_MODE = False 
+
 CHANNELS = {
     -1009003946451: {
-        "name": "تسريبات GTA 6", "target": -1002218686576,
-        "source_username": "@gta6videogame",
-        "add_link": True, "link": "@GTA6AR",
-        "prompt": """أنت قناة مخصصة لنقل أخبار وتسريبات لعبة GTA 6.
-المطلوب: انشر أي منشور يتعلق باللعبة، حتى لو كان مجرد مزحة، رقم غريب، شائعة، أو صورة بدون نص. 
-- الترجمة: ترجم النص إلى العربية بأسلوب طبيعي جداً كأن شخصاً عربياً كتب الخبر من الأصل (تجنب الترجمة الحرفية أو الركيكة).
-- الأرقام: احتفظ بجميع الأرقام كما هي باللغة الإنجليزية (مثلاً اكتب 9 وليس ٩، واكتب 10 وليس عشرة).
-- ممنوع النشر (اجعل should_post=false) فقط إذا كان إعلاناً تجارياً صريحاً (بيع حسابات، اشتراكات، عروض متاجر).
-- لا تذكر اسم قناة المصدر أو روابطها نهائياً."""
+        "name": "تسريبات GTA 6",
+        "target": -1002218686576,
+        "source_username": "@gta6deluxe",  # 👈 المصدر الروسي الجديد
+        "add_link": True,
+        "link": "@GTA6AR"
     },
 }
 
@@ -108,7 +107,7 @@ def _is_usable_media_msg(m):
     return False
 
 def _media_payload(m):
-    if isinstance(m.media, MessageMediaWebPage): return m.photo
+    if isinstance(m.media, MessageMediaWebPage): return m.photo if m.photo else None
     return m.media
 
 def extract_hidden_link_urls(message, source_username=None):
@@ -135,15 +134,18 @@ def clean_text(text, source_username=None):
     cleaned = re.sub(r'\n{3,}', '\n\n', cleaned).strip()
     return cleaned
 
-SHARE_PHRASE_RE = re.compile(r'شارك\s+(القناة|المنشور)\s+مع\s+[اأ]?صدقائ?ك?', re.IGNORECASE)
-def insert_link_after_share_phrase(text, link_text):
-    match = SHARE_PHRASE_RE.search(text)
-    if not match: return None
-    newline_idx = text.find('\n', match.end())
-    if newline_idx == -1: return text.rstrip() + f"\n{link_text}"
-    return text[:newline_idx] + f"\n{link_text}" + text[newline_idx:]
-
 def contains_click_here_phrase(text): return bool(re.search(r'اضغط\s*هنا.{0,15}(للمشاهدة|لمشاهدة|مشاهدة)', text)) if text else False
+
+def is_hardcoded_ad(text):
+    if not text: return False
+    ad_keywords = [
+        r"рekлама", r"промокод", r"скидка", r"купить", r"цена", r"руб", 
+        r"реклама", r"подписка", r"канал", r"чат"
+    ]
+    for kw in ad_keywords:
+        if re.search(kw, text, re.IGNORECASE):
+            return True
+    return False
 
 def call_groq(prompt, max_retries=3):
     if not GROQ_API_KEY: raise RuntimeError("no groq key")
@@ -162,19 +164,22 @@ def call_groq(prompt, max_retries=3):
             time.sleep(2 ** attempt)
 
 async def apply_processing(config, text):
-    custom_prompt = config.get("prompt", "")
+    if not text: return {"should_post": True, "text": ""}
     
-    if not text:
-        return {"should_post": True, "text": ""}
-        
-    full_prompt = f"""{custom_prompt}
+    prompt = f"""أنت محرر لقناة عربية متخصصة في أخبار وتسريبات لعبة GTA 6.
+المطلوب:
+1. ترجمة النص التالي إلى اللغة العربية بأسلوب طبيعي جداً كأن شخصاً عربياً كتب الخبر من الأصل (تجنب الترجمة الحرفية أو الركيكة).
+2. إذا ورد أي مبلغ بالعملة الروسية (الروبل)، قم بتحويله إلى الدولار الأمريكي (1 دولار أمريكي ≈ 82.8 روبل) واكتب السعر بالدولار مع كلمة "حوالي" للتقريب.
+3. احتفظ بالأرقام الأخرى والأسماء كما هي.
+4. لا تذكر اسم قناة المصدر أو روابطها نهائياً.
+5. إذا كان النص إعلاناً تجارياً صريحاً (بيع حسابات، اشتراكات، عروض متاجر) اجعل should_post=false.
 
-النص المراد معالجته:
+النص:
 {text}
 
-أعد النتيجة بصيغة JSON فقط: {{"should_post": true/false, "text": "النص المعالج"}}"""
+أعد النتيجة بصيغة JSON فقط: {{"should_post": true/false, "text": "النص المترجم"}}"""
     try:
-        res_raw = call_groq(full_prompt)
+        res_raw = call_groq(prompt)
         if res_raw.startswith("```"):
             res_raw = res_raw.strip("`").strip()
             if res_raw.lower().startswith("json"): res_raw = res_raw[4:].strip()
@@ -182,7 +187,7 @@ async def apply_processing(config, text):
         return {"should_post": bool(res.get("should_post", True)), "text": (res.get("text") or text).strip()}
     except Exception as e:
         print(f"❌ خطأ المعالجة: {e}")
-        return {"should_post": True, "text": text} 
+        return {"should_post": False, "text": ""}
 
 async def process_batch(source_id, messages):
     config = CHANNELS.get(source_id)
@@ -193,33 +198,34 @@ async def process_batch(source_id, messages):
     
     if contains_click_here_phrase(raw_text): return
     
+    if is_hardcoded_ad(raw_text):
+        print(f"⏭️ تجاهل إعلان تجاري (فلتر برمجي) — {config['name']}")
+        return
+    
     hidden_links = extract_hidden_link_urls(text_msg, config.get("source_username"))
     if hidden_links: 
         raw_text = (raw_text.rstrip() + "\n\n" + "\n".join(hidden_links)) if raw_text else "\n".join(hidden_links)
     
     cleaned = clean_text(raw_text, config.get("source_username"))
     
-    if cleaned and is_duplicate_content(source_id, cleaned): return
+    if is_duplicate_content(source_id, cleaned): return
     
     res = await apply_processing(config, cleaned)
     should_post = res.get("should_post", True)
     final_text = res.get("text", cleaned)
     
-    if not should_post: return 
+    if not should_post and cleaned: 
+        print(f"⏭️ تجاهل إعلان (ذكاء اصطناعي) — {config['name']}")
+        return 
     
     if cleaned: record_published_text(source_id, cleaned)
     if final_text and is_duplicate_content(f"{source_id}#final", final_text): return
     if final_text: record_published_text(f"{source_id}#final", final_text)
     
     media_msgs = [m for m in messages if _is_usable_media_msg(m)]
-
+    
     if config.get("add_link") and config.get("link"):
-        link_text = config["link"]
-        inserted = None
-        if config.get("link_after_share_phrase") and final_text:
-            inserted = insert_link_after_share_phrase(final_text, link_text)
-        if inserted is not None: final_text = inserted
-        else: final_text = f"{final_text}\n\n{link_text}" if final_text else link_text
+        final_text = f"{final_text}\n\n{config['link']}" if final_text else config["link"]
 
     try:
         if media_msgs:
@@ -254,16 +260,20 @@ async def process_batch(source_id, messages):
 async def catch_up_channel(source_id):
     config = CHANNELS.get(source_id, {})
     entity_ref = config.get("source_username") or source_id
-    key = str(source_id)
-    last_id = state.get(key, 0)
     
-    if last_id == 0:
-        latest = await client.get_messages(entity_ref, limit=1)
-        if latest: last_id = max(latest[0].id - 5, 0)
-        state[key] = last_id
+    if TEST_MODE:
+        print(f"🧪 وضع التجربة مفعل: جاري جلب آخر 5 منشورات لـ {config.get('name')}")
+        messages = await client.get_messages(entity_ref, limit=5)
+    else:
+        last_id = state.get(str(source_id), 0)
+        if last_id == 0:
+            latest = await client.get_messages(entity_ref, limit=1)
+            if latest: last_id = latest[0].id - 5
+            state[str(source_id)] = last_id
+        messages = await client.get_messages(entity_ref, min_id=last_id, limit=200)
         
-    messages = await client.get_messages(entity_ref, min_id=last_id, limit=200)
     if not messages: return
+    
     messages = list(reversed(messages))
     processed_ids = set()
     
@@ -279,13 +289,15 @@ async def catch_up_channel(source_id):
             await process_batch(source_id, [msg])
             processed_ids.add(msg.id)
             new_last = msg.id
-        state[key] = new_last
+        state[str(source_id)] = new_last
 
 async def main():
     await client.start()
+    print("🚀 بدء فحص قناة GTA 6 (المصدر الروسي)...")
     await catch_up_channel(-1009003946451)
     await client.disconnect()
     commit_state()
+    print("✅ انتهت التشغيلة.")
 
 if __name__ == "__main__":
     asyncio.run(main())
