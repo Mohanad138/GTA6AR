@@ -131,6 +131,12 @@ def clean_text(text, source_username=None):
     cleaned = re.sub(r'(https?://)?t\.me/\S+', '', cleaned, flags=re.IGNORECASE)
     cleaned = re.sub(r'https?://t\.co/\S+', '', cleaned, flags=re.IGNORECASE)
     cleaned = re.sub(r'(?i)forwarded from.*', '', cleaned)
+    
+    # 🛠️ فلتر برمجي لحذف العبارات الترويجية الخاصة بالمصدر
+    cleaned = re.sub(r'😀?\s*اشترك\s*\|\s*دردشتنا\s*😀?', '', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'اشترك\s*في\s*(قناتنا|دردشتنا)', '', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'добавляйся\s*в\s*наш\s*чат', '', cleaned, flags=re.IGNORECASE) # العبارة بالروسية إذا لم تترجم
+
     cleaned = re.sub(r'\n{3,}', '\n\n', cleaned).strip()
     return cleaned
 
@@ -172,7 +178,8 @@ async def apply_processing(config, text):
 2. إذا ورد أي مبلغ بالعملة الروسية (الروبل)، قم بتحويله إلى الدولار الأمريكي (1 دولار ≈ 82.8 روبل) واكتب السعر بالدولار مع كلمة "حوالي" للتقريب.
 3. احتفظ بالأرقام والأسماء كما هي.
 4. لا تذكر اسم قناة المصدر أو روابطها نهائياً.
-5. إذا كان النص إعلاناً تجارياً صريحاً (بيع حسابات، اشتراكات، عروض متاجر) اجعل should_post=false.
+5. **احذف أي عبارات ترويجية أو دعائية تخص قناة المصدر (مثل: "اشترك | دردشتنا" أو "اشترك في قناتنا").**
+6. إذا كان النص إعلاناً تجارياً صريحاً (بيع حسابات، اشتراكات، عروض متاجر) اجعل should_post=false.
 
 النص:
 {text}
